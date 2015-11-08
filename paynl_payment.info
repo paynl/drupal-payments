@@ -1,1 +1,10 @@
 name = Pay.nl Payment
+description = Provides Pay.nl integration for the Payment platform
+core = 7.x
+package = Payment
+
+dependencies[] = composer_manager
+dependencies[] = entity
+dependencies[] = payment
+
+files[] = paynl_payment.class.inc

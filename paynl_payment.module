@@ -1,0 +1,253 @@
+<?php
+
+/**
+ * @file
+ * Provides paynl integration for the Payment platform.
+ */
+
+define('PAYNL_PAYMENT_RETURN_PATH', 'payment/paynl/return');
+define('PAYNL_PAYMENT_LISTENER_PATH', 'payment/paynl/listener');
+
+/**
+ * Implements hook_init().
+ *
+ * Show a message if an test API key is configured.
+ */
+function paynl_payment_init() {
+  $paynl_payment_test_message = variable_get('paynl_payment_test_message', TRUE);
+
+  if ($paynl_payment_test_message) {
+    $payment_methods = entity_load('payment_method', FALSE,
+      array('controller_class_name' => 'PaynlPaymentMethodController'));
+    foreach ($payment_methods as $payment_method) {
+      $controller_data = $payment_method->controller_data;
+
+      if (strpos($controller_data['paynl_id'], 'test_') !== FALSE) {
+        drupal_set_message('This site is using a test API key for Pay.nl.', 'warning');
+        break;
+      }
+    }
+  }
+}
+
+/**
+ * Implements hook_menu().
+ */
+function paynl_payment_menu() {
+  $items = array();
+
+  $items[PAYNL_PAYMENT_RETURN_PATH] = array(
+    'page callback' => 'paynl_payment_return',
+    'page arguments' => array(3),
+    'access callback' => TRUE,
+    'type' => MENU_CALLBACK,
+  );
+  $items[PAYNL_PAYMENT_LISTENER_PATH] = array(
+    'page callback' => 'paynl_payment_listener',
+    'page arguments' => array(3),
+    'access callback' => TRUE,
+    'type' => MENU_CALLBACK,
+  );
+  $items['admin/config/paynl'] = array(
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('paynl_payment_settings_form'),
+    'access arguments' => array('administer paynl payment'),
+    'file' => 'paynl_payment.admin.inc',
+    'type' => MENU_NORMAL_ITEM,
+  );
+
+  return $items;
+}
+
+/**
+ * Implements hook_permission().
+ */
+function paynl_payment_permission() {
+  return array(
+    'administer paynl payment' => array(
+      'title' => t('Administer Pay.nl Payment'),
+    ),
+  );
+}
+
+/**
+ * Implements hook_payment_method_controller_info().
+ */
+function paynl_payment_payment_method_controller_info() {
+  return array('PaynlPaymentMethodController');
+}
+
+/**
+ * Implements hook_entity_load().
+ */
+function paynl_payment_entity_load(array $entities, $entity_type) {
+  if ($entity_type == 'payment_method') {
+    foreach ($entities as $payment_method) {
+      if ($payment_method->controller->name == 'PaynlPaymentMethodController') {
+        $payment_method->controller_data
+          = variable_get('paynl_payment_' . $payment_method->pmid . '_controller_data', array());
+      }
+    }
+  }
+}
+
+/**
+ * Implements hook_ENTITY_TYPE_ACTION().
+ */
+function paynl_payment_payment_method_insert(PaymentMethod $payment_method) {
+  if ($payment_method->controller->name == 'PaynlPaymentMethodController') {
+    variable_set('paynl_payment_' . $payment_method->pmid . '_controller_data',
+            $payment_method->controller_data);
+  }
+}
+
+/**
+ * Implements hook_ENTITY_TYPE_ACTION().
+ */
+function paynl_payment_payment_method_update(PaymentMethod $payment_method) {
+  if ($payment_method->controller->name == 'PaynlPaymentMethodController') {
+    variable_set('paynl_payment_' . $payment_method->pmid . '_controller_data',
+            $payment_method->controller_data);
+  }
+}
+
+/**
+ * Implements hook_ENTITY_TYPE_ACTION().
+ */
+function paynl_payment_payment_method_delete(PaymentMethod $payment_method) {
+  if ($payment_method->controller->name == 'PaynlPaymentMethodController') {
+    variable_del('paynl_payment_' . $payment_method->pmid . '_controller_data');
+  }
+}
+
+/**
+ * Return callback.
+ *
+ * @param string $pid
+ *   The id of the payment.
+ *
+ * Pay.nl is redirecting the visitor here after the payment process. At this
+ * point we don't know the status of the payment yet so we can only load
+ * the payment and call its finish callback.
+ */
+function paynl_payment_return($pid) {
+  // Load the payment.
+  $payment = entity_load_single('payment', $pid);
+
+  // Get the request parameters.
+  $parameters = drupal_get_query_parameters($_GET);
+
+  // Get configuration data.
+  $controller_data = $payment->method->controller_data;
+
+  // Configure API.
+  $paynl_config = new \Paynl\Config();
+  $api_key = $controller_data['paynl_id'];
+  $service_id = $controller_data['paynl_service_id'];
+  $paynl_config->setApiToken($api_key);
+  $paynl_config->setServiceId($service_id);
+
+  // Get the information from Pay.nl.
+  $id = $parameters['orderId'];
+  $paynl = new \Paynl\Api\Transaction\Info();
+  $paynl->setTransactionId($id);
+  $info = $paynl->doRequest();
+dpm($info, '$info');
+  // Finish the payment.
+  $payment->finish();
+}
+
+/**
+ * Listener callback.
+ *
+ * @param string $pid
+ *   The id of the payment.
+ *
+ * Pay.nl calls this after the payment status has been changed. Pay.nl only
+ * gives us an id leaving us with the responsibility to get the payment status.
+ */
+function paynl_payment_listener($pid) {
+  $payment_status = array(
+    'open' => PAYMENT_STATUS_PENDING,
+    'cancelled' => PAYMENT_STATUS_CANCELLED,
+    'paid' => PAYMENT_STATUS_SUCCESS,
+    'paidout' => PAYMENT_STATUS_MONEY_TRANSFERRED,
+    'refunded' => PAYMENT_STATUS_CANCELLED,
+    'expired' => PAYMENT_STATUS_EXPIRED,
+  );
+
+  // Get the request parameters.
+  $parameters = drupal_get_query_parameters($_POST);
+
+  if (isset($parameters['id'])) {
+    watchdog('Pay.nl Payment', t('Pay.nl gave as id @id for payment @pid',
+      array('@id' => $parameters['id'], '@pid' => $pid)));
+
+    // Load the payment.
+    $payment = entity_load_single('payment', $pid);
+
+    if ($payment) {
+      $paynl = new paynl_API_Client();
+      $api_key = $payment->method->controller_data['paynl_id'];
+      $paynl->setApiKey($api_key);
+
+      $transaction = $paynl->payments->get($parameters['id']);
+
+      $payment->setStatus(new PaymentStatusItem($payment_status[$transaction->status]));
+      entity_save('payment', $payment);
+    }
+  }
+}
+
+/**
+ * Payment method configuration form elements callback.
+ *
+ * @param array $form
+ *   A Drupal form array.
+ * @param array $form_state
+ *   The current state of the form.
+ *
+ * @return array
+ *   A Drupal form array.
+ */
+function paynl_payment_method_configuration(array $form, array &$form_state) {
+  $controller_data = $form_state['payment_method']->controller_data;
+
+  if (!is_array($form)) {
+    $form = array();
+  }
+
+  /* @todo Use test and live ids, let user select test or live mode */
+  $form['paynl_id'] = array(
+    '#type' => 'textfield',
+    '#required' => TRUE,
+    '#title' => t('Pay.nl API key'),
+    '#description' => t('Your Pay.nl API key'),
+    '#default_value' => isset($controller_data['paynl_id']) ? $controller_data['paynl_id'] : '',
+  );
+
+  $form['paynl_service_id'] = array(
+    '#type' => 'textfield',
+    '#required' => TRUE,
+    '#title' => t('Pay.nl Service ID'),
+    '#description' => t('Your Pay.nl Service ID'),
+    '#default_value' => isset($controller_data['paynl_service_id']) ? $controller_data['paynl_service_id'] : '',
+  );
+
+  return $form;
+}
+
+/**
+ * Validation callback for payment method configuration form elements callback.
+ *
+ * @param array $form
+ *   A Drupal form array.
+ * @param array $form_state
+ *   The current state of the form.
+ */
+function paynl_payment_method_configuration_validate(array $form, array &$form_state) {
+  $values = drupal_array_get_nested_value($form_state['values'], $form['#parents']);
+
+  $form_state['payment_method']->controller_data['paynl_id'] = $values['paynl_id'];
+  $form_state['payment_method']->controller_data['paynl_service_id'] = $values['paynl_service_id'];
+}
