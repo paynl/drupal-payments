@@ -9,28 +9,6 @@ define('PAYNL_PAYMENT_RETURN_PATH', 'payment/paynl/return');
 define('PAYNL_PAYMENT_LISTENER_PATH', 'payment/paynl/listener');
 
 /**
- * Implements hook_init().
- *
- * Show a message if an test API key is configured.
- */
-function paynl_payment_init() {
-  $paynl_payment_test_message = variable_get('paynl_payment_test_message', TRUE);
-
-  if ($paynl_payment_test_message) {
-    $payment_methods = entity_load('payment_method', FALSE,
-      array('controller_class_name' => 'PaynlPaymentMethodController'));
-    foreach ($payment_methods as $payment_method) {
-      $controller_data = $payment_method->controller_data;
-
-      if (strpos($controller_data['paynl_id'], 'test_') !== FALSE) {
-        drupal_set_message('This site is using a test API key for Pay.nl.', 'warning');
-        break;
-      }
-    }
-  }
-}
-
-/**
  * Implements hook_menu().
  */
 function paynl_payment_menu() {
@@ -170,11 +148,10 @@ function _paynl_payment_update_payment_status($payment, $type = 'return') {
   $controller_data = $payment->method->controller_data;
 
   // Configure API.
-  $paynl_config = new \Paynl\Config();
   $api_key = $controller_data['paynl_id'];
   $service_id = $controller_data['paynl_service_id'];
-  $paynl_config->setApiToken($api_key);
-  $paynl_config->setServiceId($service_id);
+  \Paynl\Config::setApiToken($api_key);
+  \Paynl\Config::setServiceId($service_id);
 
   // Change status of payment based on transaction status.
   $transaction = ($type == 'return') ? \Paynl\Transaction::getForReturn() : \Paynl\Transaction::getForExchange();
