@@ -21,6 +21,9 @@ class PaynlPaymentMethodController extends PaymentMethodController {
    * Implements PaymentMethodController::execute().
    */
   public function execute(Payment $payment) {
+    // Get the current language.
+    global $language;
+
     // Get configuration data.
     $controller_data = $payment->method->controller_data;
 
@@ -53,6 +56,7 @@ class PaynlPaymentMethodController extends PaymentMethodController {
       'exchangeUrl' => url(PAYNL_PAYMENT_LISTENER_PATH . '/' . $payment-> pid, array('absolute' => TRUE)),
       'description' => $payment->description,
       'products' => $line_items,
+      'language' => strtoupper($language->language),
     ));
 
     // Redirect to PSP.
