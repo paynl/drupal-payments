@@ -57,6 +57,7 @@ class PaynlPaymentMethodController extends PaymentMethodController {
       'description' => $payment->description,
       'products' => $line_items,
       'language' => strtoupper($language->language),
+      'testmode' => $controller_data['paynl_test_mode'],
     ));
 
     // Redirect to PSP.

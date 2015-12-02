@@ -181,7 +181,6 @@ function paynl_payment_method_configuration(array $form, array &$form_state) {
     $form = array();
   }
 
-  /* @todo Use test and live ids, let user select test or live mode */
   $form['paynl_id'] = array(
     '#type' => 'textfield',
     '#required' => TRUE,
@@ -196,6 +195,14 @@ function paynl_payment_method_configuration(array $form, array &$form_state) {
     '#title' => t('Pay.nl Service ID'),
     '#description' => t('Your Pay.nl Service ID'),
     '#default_value' => isset($controller_data['paynl_service_id']) ? $controller_data['paynl_service_id'] : '',
+  );
+
+  $form['paynl_test_mode'] = array(
+    '#type' => 'checkbox',
+    '#title' => t('Test mode'),
+    '#description' => t('Use Pay.nl in test mode (don\'t forget to disable in production)'),
+    '#return_value' => 1,
+    '#default_value' => isset($controller_data['paynl_test_mode']) ? $controller_data['paynl_test_mode'] : 0,
   );
 
   return $form;
@@ -214,4 +221,5 @@ function paynl_payment_method_configuration_validate(array $form, array &$form_s
 
   $form_state['payment_method']->controller_data['paynl_id'] = $values['paynl_id'];
   $form_state['payment_method']->controller_data['paynl_service_id'] = $values['paynl_service_id'];
+  $form_state['payment_method']->controller_data['paynl_test_mode'] = $values['paynl_test_mode'];
 }
