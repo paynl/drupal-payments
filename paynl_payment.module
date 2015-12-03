@@ -26,9 +26,17 @@ function paynl_payment_menu() {
     'access callback' => TRUE,
     'type' => MENU_CALLBACK,
   );
-  $items['admin/config/paynl'] = array(
+  $items['admin/config/services/payment/paynl/method/%'] = array(
+    'title' => t('Pay.nl settings'),
     'page callback' => 'drupal_get_form',
-    'page arguments' => array('paynl_payment_settings_form'),
+    'page arguments' => array('paynl_payment_method_settings_form', 6),
+    'access arguments' => array('administer paynl payment'),
+    'file' => 'paynl_payment.admin.inc',
+    'type' => MENU_NORMAL_ITEM,
+  );
+  $items['admin/config/services/payment/paynl'] = array(
+    'title' => t('Pay.nl payment methods'),
+    'page callback' => 'paynl_payment_methods_overview',
     'access arguments' => array('administer paynl payment'),
     'file' => 'paynl_payment.admin.inc',
     'type' => MENU_NORMAL_ITEM,
@@ -44,6 +52,17 @@ function paynl_payment_permission() {
   return array(
     'administer paynl payment' => array(
       'title' => t('Administer Pay.nl Payment'),
+    ),
+  );
+}
+
+/**
+ * Implements hook_theme().
+ */
+function paynl_payment_theme() {
+  return array(
+    'paynl_payment_method_settings_form' => array(
+      'render element' => 'form',
     ),
   );
 }
@@ -222,4 +241,55 @@ function paynl_payment_method_configuration_validate(array $form, array &$form_s
   $form_state['payment_method']->controller_data['paynl_id'] = $values['paynl_id'];
   $form_state['payment_method']->controller_data['paynl_service_id'] = $values['paynl_service_id'];
   $form_state['payment_method']->controller_data['paynl_test_mode'] = $values['paynl_test_mode'];
+}
+
+/**
+ * Theme the method settings form as a table.
+ */
+function theme_paynl_payment_method_settings_form($variables) {
+  $form = $variables['form'];
+
+  $header = array();
+  $header_set = FALSE;
+  $output = '';
+  $rows = array();
+  foreach (element_children($form['payment_methods']) as $key) {
+    $form['payment_methods'][$key]['weight']['#attributes']['class'] = array('payment-method-weight');
+
+    foreach (element_children($form['payment_methods'][$key]) as $element_key) {
+      if (!$header_set) {
+        $header[] = t($form['payment_methods'][$key][$element_key]['#title']);
+      }
+      $form['payment_methods'][$key][$element_key]['#title_display'] = 'invisible';
+    }
+    $header_set = TRUE;
+
+    $row = array();
+    $row[] = drupal_render($form['payment_methods'][$key]['enabled']);
+    $row[] = $form['payment_methods'][$key]['id']['#value'] . drupal_render($form['payment_methods'][$key]['id']);
+    $row[] = $form['payment_methods'][$key]['name']['#value'] . drupal_render($form['payment_methods'][$key]['name']);
+    $row[] = drupal_render($form['payment_methods'][$key]['fee']);
+    $row[] = drupal_render($form['payment_methods'][$key]['fee_type']);
+    $row[] = drupal_render($form['payment_methods'][$key]['countries']);
+    $row[] = drupal_render($form['payment_methods'][$key]['min']);
+    $row[] = drupal_render($form['payment_methods'][$key]['max']);
+    $row[] = drupal_render($form['payment_methods'][$key]['weight']);
+
+    $rows[] = array(
+      'data' => $row,
+      'class' => array('draggable'),
+    );
+  }
+
+  $output .= theme('table', array(
+    'header' => $header,
+    'rows' => $rows,
+    'attributes' => array('id' => 'payment-methods-table'),
+  ));
+
+  $output .= drupal_render_children($form);
+
+  drupal_add_tabledrag('payment-methods-table', 'order', 'sibling', 'payment-method-weight', NULL, NULL, TRUE);
+
+  return $output;
 }

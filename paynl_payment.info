@@ -3,6 +3,7 @@ description = Provides Pay.nl integration for the Payment platform
 core = 7.x
 package = Payment
 
+dependencies[] = locale
 dependencies[] = composer_manager
 dependencies[] = entity
 dependencies[] = payment
