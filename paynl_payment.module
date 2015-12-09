@@ -293,3 +293,174 @@ function theme_paynl_payment_method_settings_form($variables) {
 
   return $output;
 }
+
+/**
+ * Implements
+ * PaymentMethodController::payment_configuration_form_elements_callback.
+ */
+function paynl_payment_payment_configuration(array $element, array &$form_state) {
+  $payment = $form_state['payment'];
+  $values = $form_state['values'];
+
+  // Get enabled payment methods for this payment method controller.
+  $payment_methods = paynl_payment_load_payment_methods($values['payment_method']['pmid'], $payment);
+
+  $payment_method_option_list = array();
+  foreach ($payment_methods as $payment_method) {
+    $payment_method_option_list[$payment_method->id]
+      = $payment_method->settings['name'] . ' (' . $payment_method->settings['calculated_fee'] . ')';
+  }
+
+  $elements = array(
+    'payment_method' => array(
+      '#type' => 'select',
+      '#title' => t('Payment method'),
+      '#title_display' => 'invisible',
+      '#options' => $payment_method_option_list,
+    ),
+  );
+
+  return $elements;
+}
+
+/**
+ *
+ */
+function paynl_payment_payment_configuration_validate(array $element, array &$form_state) {
+  $values = drupal_array_get_nested_value($form_state['values'], $element['#parents']);
+  $form_state['payment']->context_data['payment_method'] = $values['payment_method'];
+}
+
+/**
+ * Load a specific Pay.nl payment method.
+ */
+function paynl_payment_load_payment_method($id, $pmid) {
+  $payment_methods = _paynl_payment_load_method_settings($pmid);
+
+  return $payment_methods[$id];
+}
+
+/**
+ * Load enabled Pay.nl payment methods.
+ */
+function paynl_payment_load_payment_methods($pmid, Payment $payment) {
+  $payment_methods = _paynl_payment_load_method_settings($pmid);
+
+  // Remove methods that are not enabled.
+  foreach ($payment_methods as $id => $payment_method) {
+    if (!$payment_method->settings['enabled']) {
+      unset($payment_methods[$id]);
+    }
+  }
+
+  // Validated enabled methods against current payment.
+  paynl_payment_validate_payment_methods($payment_methods, $payment);
+
+  // Calculate the fee for each method.
+  foreach ($payment_methods as $payment_method) {
+    $fee = paynl_payment_calculate_fee($payment_method, $payment, TRUE);
+    $payment_method->settings['calculated_fee'] = payment_amount_human_readable($fee, $payment->currency_code);
+  }
+
+  return $payment_methods;
+}
+
+/**
+ * Validate Pay.nl payment methods against a payment.
+ */
+function paynl_payment_validate_payment_methods(&$payment_methods, Payment $payment) {
+  foreach ($payment_methods as $id => $payment_method) {
+    // Remove payment methods that are not available for the current country.
+
+    // Remove payment methods that require a higher total amount.
+    if ($payment->totalAmount(TRUE) < $payment_method->settings['min']) {
+      unset($payment_methods[$id]);
+    }
+
+    // Remove payment methods that require a lower total amount.
+    if (($payment_method->settings['max'] != -1)
+      && ($payment->totalAmount(TRUE) > $payment_method->settings['max'])) {
+      unset($payment_methods[$id]);
+    }
+  }
+}
+
+/**
+ * Calculate transaction fee for a payment method for a specific payment.
+ */
+function paynl_payment_calculate_fee($payment_method, Payment $payment, $tax) {
+  $fee = 0;
+  if (!empty($payment_method->settings['fee'])) {
+    $fee = $payment_method->settings['fee'];
+    if ($tax) {
+      $tax_rate = _paynl_payment_payment_tax_rate($payment);
+      $fee = (1 + $tax_rate) * $fee;
+    }
+    if ($payment_method->settings['fee_type'] == 'percentage') {
+      $fee = ($payment_method->settings['fee'] / 100) * $payment->totalAmount($tax);
+    }
+  }
+
+  // Ensure two decimals.
+  return round(100 * $fee) / 100;
+}
+
+/**
+ * Implements hook_payment_pre_execute().
+ *
+ * Add the transaction fee as a line item.
+ */
+function paynl_payment_payment_pre_execute(Payment $payment) {
+  // Use maximum tax rate for transaction fee.
+  $tax_rate = _paynl_payment_payment_tax_rate($payment);
+
+  $payment_method = paynl_payment_load_payment_method($payment->context_data['payment_method'],
+    $payment->method->pmid);
+  $fee = paynl_payment_calculate_fee($payment_method, $payment, FALSE);
+  if ($fee > 0) {
+    $payment->setLineItem(new PaymentLineItem(array(
+      'name' => 'transaction_fee',
+      'amount' => $fee,
+      'description' => 'Transaction fee',
+      'tax_rate' => $tax_rate,
+    )));
+  }
+}
+
+/**
+ * Helper function to load payment method settings.
+ */
+function _paynl_payment_load_method_settings($pmid) {
+  $payment_methods = db_select('paynl_payment_method_settings', 'p')
+    ->fields('p')
+    ->condition('pmid', $pmid)
+    ->orderBy('weight')
+    ->execute()
+    ->fetchAllAssoc('id');
+
+  if ($payment_methods) {
+    foreach ($payment_methods as $payment_method) {
+      $payment_method->settings = unserialize($payment_method->settings);
+    }
+  }
+  else {
+    $payment_methods = array();
+  }
+
+  return $payment_methods;
+}
+
+/**
+ * Helper function to get the maximum tax rate for a payment.
+ */
+function _paynl_payment_payment_tax_rate(Payment $payment) {
+  $tax_rate = 0;
+  $line_items = $payment->getLineItems();
+  foreach ($line_items as $line_item) {
+    if ($line_item->tax_rate > $tax_rate) {
+      $tax_rate = $line_item->tax_rate;
+    }
+  }
+
+  return $tax_rate;
+}

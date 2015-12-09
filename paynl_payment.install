@@ -1,0 +1,61 @@
+<?php
+
+/**
+ * @file
+ * Installation and uninstallation functions.
+ */
+
+/**
+ * Implements hook_schema().
+ */
+function paynl_payment_schema() {
+  $schema['paynl_payment_method_settings'] = array(
+    'fields' => array(
+      'id' => array(
+        'description' => 'The {paynl_payment_method_settings}.id as used by Pay.nl.',
+        'type' => 'int',
+        'not null' => TRUE,
+        'default' => 0,
+      ),
+      'pmid' => array(
+        'description' => 'The {payment_method}.pmid these {paynl_payment_method_settings} belongs to.',
+        'type' => 'int',
+        'not null' => TRUE,
+        'default' => 0,
+      ),
+      'settings' => array(
+        'description' => 'A serialized representation of the settings for this payment method.',
+        'type' => 'text',
+      ),
+      'weight' => array(
+        'type' => 'int',
+        'not null' => TRUE,
+        'default' => 0,
+        'description' => 'The weight of this payment method in listings and the user interface.',
+      ),
+    ),
+    'primary key' => array('id', 'pmid'),
+  );
+
+  return $schema;
+}
+
+/**
+ * Add paynl_payment_method_settings database table.
+ */
+function paynl_payment_update_7001(&$sandbox) {
+  db_create_table('paynl_payment_method_settings',
+    drupal_get_schema_unprocessed('paynl_payment', 'paynl_payment_method_settings'));
+}
+
+/**
+ * Add separate field for weight to get initial sorting in the user interface.
+ */
+function paynl_payment_update_7002(&$sandbox) {
+  db_add_field('paynl_payment_method_settings', 'weight', array(
+    'type' => 'int',
+    'not null' => TRUE,
+    'default' => 0,
+    'description' => 'The weight of this payment method in listings and the user interface.',
+  ));
+}
