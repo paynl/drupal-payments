@@ -72,8 +72,10 @@ function paynl_payment_method_settings_form($form, &$form_state, $pmid) {
 
   // Add payment methods to the form.
   $form['payment_methods'] = array('#tree' => TRUE);
+  $weight_i = -10;
   foreach ($methods as $id => $method) {
-    $form['payment_methods'][$settings[$id]->weight] = array(
+    $weight = isset($settings[$id]->weight) ? $settings[$id]->weight : $weight_i++;
+    $form['payment_methods'][$weight] = array(
       'enabled' => array(
         '#type' => 'checkbox',
         '#title' => t('Enabled'),
@@ -125,7 +127,7 @@ function paynl_payment_method_settings_form($form, &$form_state, $pmid) {
       'weight' => array(
         '#type' => 'weight',
         '#title' => t('Weight'),
-        '#default_value' => isset($settings[$id]->weight) ? $settings[$id]->weight : 0,
+        '#default_value' => $weight,
         '#delta' => 10,
         '#title_display' => 'invisible',
       ),
