@@ -300,10 +300,9 @@ function theme_paynl_payment_method_settings_form($variables) {
  */
 function paynl_payment_payment_configuration(array $element, array &$form_state) {
   $payment = $form_state['payment'];
-  $values = $form_state['values'];
 
   // Get enabled payment methods for this payment method controller.
-  $payment_methods = paynl_payment_load_payment_methods($values['payment_method']['pmid'], $payment);
+  $payment_methods = paynl_payment_load_payment_methods($payment);
 
   $payment_method_option_list = array();
   foreach ($payment_methods as $payment_method) {
@@ -343,7 +342,8 @@ function paynl_payment_load_payment_method($id, $pmid) {
 /**
  * Load enabled Pay.nl payment methods.
  */
-function paynl_payment_load_payment_methods($pmid, Payment $payment) {
+function paynl_payment_load_payment_methods(Payment $payment) {
+  $pmid = $payment->method->pmid;
   $payment_methods = _paynl_payment_load_method_settings($pmid);
 
   // Remove methods that are not enabled.
