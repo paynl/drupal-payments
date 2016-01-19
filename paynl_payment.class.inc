@@ -38,7 +38,7 @@ class PaynlPaymentMethodController extends PaymentMethodController {
     $line_items = array();
     foreach ($payment->getLineItems() as $line_item) {
       $line_items[] = array(
-        'id' => $line_item->name,
+        'id' => substr($line_item->name, 0, 25), // @todo Remove trimming once Pay.nl accepts longer product ids.
         'name' => $line_item->name,
         'price' => $line_item->unitAmount(TRUE),
         'tax' => $line_item->unitAmount(TRUE) - $line_item->unitAmount(FALSE),
@@ -46,8 +46,7 @@ class PaynlPaymentMethodController extends PaymentMethodController {
       );
     }
 
-    // Start transaction.
-    $transaction = \Paynl\Transaction::start(array(
+    $transaction_data = array(
       'amount' => $payment->totalAmount(TRUE),
       'returnUrl' => url(PAYNL_PAYMENT_RETURN_PATH . '/' . $payment->pid, array('absolute' => TRUE)),
       'exchangeUrl' => url(PAYNL_PAYMENT_LISTENER_PATH . '/' . $payment-> pid, array('absolute' => TRUE)),
@@ -57,7 +56,13 @@ class PaynlPaymentMethodController extends PaymentMethodController {
       'language' => strtoupper($language->language),
       'ipaddress' => ip_address(),
       'testmode' => $controller_data['paynl_test_mode'],
-    ));
+    );
+
+    // Let other modules alter the transaction data.
+    drupal_alter('paynl_payment_transaction_data', $transaction_data, $payment);
+
+    // Start transaction.
+    $transaction = \Paynl\Transaction::start($transaction_data);
 
     // Redirect to PSP.
     $redirect_url = $transaction->getRedirectUrl();
