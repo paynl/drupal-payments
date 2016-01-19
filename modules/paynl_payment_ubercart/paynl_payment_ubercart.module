@@ -1,0 +1,39 @@
+<?php
+
+/**
+ * @file
+ * Extends Pay.nl integration for the Payment platform for Ubercart.
+ */
+
+/**
+ * Implements hook_paynl_payment_transaction_data_alter().
+ */
+function paynl_payment_ubercart_paynl_payment_transaction_data_alter($transaction_data, Payment $payment) {
+  // We are only handling Ubercart payments here.
+  if ($payment->context == 'payment_ubercart') {
+    $order_id = $payment->payment_ubercart_uc_order_id;
+    $order = uc_order_load($order_id);
+
+    // Add address information to the transaction data.
+    $countries = uc_get_country_data(array('country_id' => $order->delivery_country));
+    // We assume there is only one matching country.
+    $country = reset($countries);
+    $transaction_data['address'] = array(
+      'streetName' => $order->delivery_street1,
+      'zipCode' => $order->delivery_postal_code,
+      'city' => $order->delivery_city,
+      'country' => $country['country_iso_code_2'],
+    );
+    $countries = uc_get_country_data(array('country_id' => $order->billing_country));
+    // We assume there is only one matching country.
+    $country = reset($countries);
+    $transaction_data['invoiceAddress'] = array(
+      'initials' => $order->billing_first_name,
+      'lastName' => $order->billing_last_name,
+      'streetName' => $order->billing_street1,
+      'zipCode' => $order->billing_postal_code,
+      'city' => $order->billing_city,
+      'country' => $country['country_iso_code_2'],
+    );
+  }
+}
