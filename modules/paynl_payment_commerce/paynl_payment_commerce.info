@@ -1,0 +1,6 @@
+name = Pay.nl Payment Commerce
+description = Extends Pay.nl integration for the Payment platform for Drupal Commerce.
+core = 7.x
+package = Payment
+
+dependencies[] = paynl_payment
