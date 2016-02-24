@@ -38,7 +38,7 @@ class PaynlPaymentMethodController extends PaymentMethodController {
     $line_items = array();
     foreach ($payment->getLineItems() as $line_item) {
       $line_items[] = array(
-        'id' => substr($line_item->name, 0, 25), // @todo Remove trimming once Pay.nl accepts longer product ids.
+        'id' => substr($line_item->name, 0, 25),
         'name' => $line_item->name,
         'price' => $line_item->unitAmount(TRUE),
         'tax' => $line_item->unitAmount(TRUE) - $line_item->unitAmount(FALSE),
