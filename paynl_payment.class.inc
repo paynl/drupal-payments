@@ -48,6 +48,7 @@ class PaynlPaymentMethodController extends PaymentMethodController {
 
     $transaction_data = array(
       'amount' => $payment->totalAmount(TRUE),
+      'currency' => $payment->currency_code,
       'returnUrl' => url(PAYNL_PAYMENT_RETURN_PATH . '/' . $payment->pid, array('absolute' => TRUE)),
       'exchangeUrl' => url(PAYNL_PAYMENT_LISTENER_PATH . '/' . $payment-> pid, array('absolute' => TRUE)),
       'paymentMethod' => $payment->context_data['payment_method'],
