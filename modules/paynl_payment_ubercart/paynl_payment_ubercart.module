@@ -18,8 +18,11 @@ function paynl_payment_ubercart_paynl_payment_transaction_data_alter($transactio
     $countries = uc_get_country_data(array('country_id' => $order->delivery_country));
     // We assume there is only one matching country.
     $country = reset($countries);
+    // Split street name and house number.
+    list($street, $number) = _paynl_payment_split_address($order->delivery_street1);
     $transaction_data['address'] = array(
-      'streetName' => $order->delivery_street1,
+      'streetName' => $street,
+      'houseNumber' => $number,
       'zipCode' => $order->delivery_postal_code,
       'city' => $order->delivery_city,
       'country' => $country['country_iso_code_2'],
@@ -27,13 +30,32 @@ function paynl_payment_ubercart_paynl_payment_transaction_data_alter($transactio
     $countries = uc_get_country_data(array('country_id' => $order->billing_country));
     // We assume there is only one matching country.
     $country = reset($countries);
+    // Split street name and house number.
+    list($street, $number) = _paynl_payment_split_address($order->billing_street1);
     $transaction_data['invoiceAddress'] = array(
       'initials' => $order->billing_first_name,
       'lastName' => $order->billing_last_name,
-      'streetName' => $order->billing_street1,
+      'streetName' => $street,
+      'houseNumber' => $number,
       'zipCode' => $order->billing_postal_code,
       'city' => $order->billing_city,
       'country' => $country['country_iso_code_2'],
     );
+  }
+}
+
+/**
+ * Implements hook_paynl_payment_current_country_alter().
+ */
+function paynl_payment_ubercart_paynl_payment_current_country_alter(&$country, Payment $payment) {
+  // We are only handling Ubercart payments here.
+  if ($payment->context == 'payment_ubercart') {
+    $order_id = $payment->payment_ubercart_uc_order_id;
+    $order = uc_order_load($order_id);
+
+    $countries = uc_get_country_data(array('country_id' => $order->billing_country));
+    // We assume there is only one matching country.
+    $country_info = reset($countries);
+    $country = $country_info['country_iso_code_2'];
   }
 }

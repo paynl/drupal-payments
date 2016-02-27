@@ -15,33 +15,57 @@ function paynl_payment_commerce_paynl_payment_transaction_data_alter($transactio
     $order = commerce_order_load($order_id);
 
     // Add address information to the transaction data.
-    $shipping_profile_ids = field_get_items('commerce_order', $order, 'commerce_customer_shipping');
-    // We assume there is only one profile.
-    $shipping_profile_id = reset($shipping_profile_ids);
-    $profile = commerce_customer_profile_load($shipping_profile_id['profile_id']);
-    $addresses = field_get_items('commerce_customer_profile', $profile, 'commerce_customer_address');
-    // We assume there is only one address.
-    $address = reset($addresses);
+    $address = _paynl_payment_commerce_address_from_order($order, 'commerce_customer_shipping');
     $transaction_data['address'] = array(
-      'streetName' => $address['thoroughfare'],
+      'streetName' => $address['street_name'],
+      'houseNumber' => $address['house_number'],
       'zipCode' => $address['postal_code'],
       'city' => $address['locality'],
       'country' => $address['country'],
     );
-    $billing_profile_ids = field_get_items('commerce_order', $order, 'commerce_customer_billing');
-    // We assume there is only one profile.
-    $billing_profile_id = reset($billing_profile_ids);
-    $profile = commerce_customer_profile_load($billing_profile_id['profile_id']);
-    $addresses = field_get_items('commerce_customer_profile', $profile, 'commerce_customer_address');
-    // We assume there is only one address.
-    $address = reset($addresses);
+    $address = _paynl_payment_commerce_address_from_order($order, 'commerce_customer_billing');
     $transaction_data['invoiceAddress'] = array(
       'initials' => $address['first_name'],
       'lastName' => $address['last_name'],
-      'streetName' => $address['thoroughfare'],
+      'streetName' => $address['street_name'],
+      'houseNumber' => $address['house_number'],
       'zipCode' => $address['postal_code'],
       'city' => $address['locality'],
       'country' => $address['country'],
     );
   }
+}
+
+/**
+ * Implements hook_paynl_payment_current_country_alter().
+ */
+function paynl_payment_commerce_paynl_payment_current_country_alter(&$country, Payment $payment) {
+  // We are only handling Drupal Commerce payments here.
+  if ($payment->context == 'payment_commerce') {
+    $order_id = $payment->context_data['order_id'];
+    $order = commerce_order_load($order_id);
+
+    $address = _paynl_payment_commerce_address_from_order($order, 'commerce_customer_billing');
+    $country = $address['country'];
+  }
+}
+
+/**
+ * Helper function to get address from order.
+ */
+function _paynl_payment_commerce_address_from_order($order, $address_field) {
+  $profile_ids = field_get_items('commerce_order', $order, $address_field);
+  // We assume there is only one profile for each address field.
+  $profile_id = reset($profile_ids);
+  $profile = commerce_customer_profile_load($profile_id['profile_id']);
+  $addresses = field_get_items('commerce_customer_profile', $profile, 'commerce_customer_address');
+  // We assume there is only one address.
+  $address = reset($addresses);
+
+  // Split street name and house number.
+  list($street, $number) = _paynl_payment_split_address($address['thoroughfare']);
+  $address['street_name'] = $street;
+  $address['house_number'] = $number;
+
+  return $address;
 }

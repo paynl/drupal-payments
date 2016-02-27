@@ -371,6 +371,13 @@ function paynl_payment_load_payment_methods(Payment $payment) {
 function paynl_payment_validate_payment_methods(&$payment_methods, Payment $payment) {
   foreach ($payment_methods as $id => $payment_method) {
     // Remove payment methods that are not available for the current country.
+    $current_country = paynl_payment_current_country($payment);
+    $allowed_countries = $payment_method->settings['countries'];
+    if ($current_country && !empty($allowed_countries)) {
+      if (!in_array($current_country, $allowed_countries)) {
+        unset($payment_methods[$id]);
+      }
+    }
 
     // Remove payment methods that require a higher total amount.
     if ($payment->totalAmount(TRUE) < $payment_method->settings['min']) {
@@ -383,6 +390,17 @@ function paynl_payment_validate_payment_methods(&$payment_methods, Payment $paym
       unset($payment_methods[$id]);
     }
   }
+}
+
+/**
+ * Get the country from the payment context.
+ */
+function paynl_payment_current_country(Payment $payment) {
+  $country = NULL;
+
+  drupal_alter('paynl_payment_current_country', $country, $payment);
+
+  return $country;
 }
 
 /**
@@ -463,4 +481,25 @@ function _paynl_payment_payment_tax_rate(Payment $payment) {
   }
 
   return $tax_rate;
+}
+
+/**
+ * Helper function to split an address line into a streetname and a housenumber.
+ *
+ * Function provided by Pay.nl.
+ */
+function _paynl_payment_split_address($strAddress) {
+  $strAddress = trim($strAddress);
+  $a               = preg_split('/([0-9]+)/', $strAddress, 2,
+    PREG_SPLIT_DELIM_CAPTURE);
+  $strStreetName   = trim(array_shift($a));
+  $strStreetNumber = trim(implode('', $a));
+  if (empty($strStreetName)) { // American address notation
+    $a = preg_split('/([a-zA-Z]{2,})/', $strAddress, 2,
+      PREG_SPLIT_DELIM_CAPTURE);
+    $strStreetNumber = trim(array_shift($a));
+    $strStreetName   = implode(' ', $a);
+  }
+
+  return array($strStreetName, $strStreetNumber);
 }
